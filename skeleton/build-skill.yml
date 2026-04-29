@@ -1,0 +1,139 @@
+name: Build and Release Skill
+
+# Универсальный workflow для скиллов SWC.
+# Имя скилла определяется автоматически из YAML frontmatter в SKILL.md.template.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'skill-template/**'
+      - 'skill-references/**'
+      - 'scripts/build_skill.py'
+      - 'VERSION'
+      - '.github/workflows/build-skill.yml'
+
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Тег релиза (например, v1.3.1). Если пусто - используется VERSION из репозитория.'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install PyYAML
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ -n "${{ inputs.release_tag }}" ]; then
+            VERSION="${{ inputs.release_tag }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION=$(cat VERSION | tr -d '[:space:]')
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "TAG=v$VERSION" >> $GITHUB_OUTPUT
+          echo "📌 Версия: v$VERSION"
+
+      - name: Determine skill name from YAML frontmatter
+        id: skill
+        run: |
+          SKILL_NAME=$(python3 -c "
+          import re
+          with open('skill-template/SKILL.md.template') as f:
+              content = f.read()
+          match = re.search(r'^name:\s*(\S+)\s*$', content.split('---', 2)[1], re.MULTILINE)
+          if match:
+              print(match.group(1))
+          else:
+              raise SystemExit('name not found in YAML frontmatter')
+          ")
+          echo "NAME=$SKILL_NAME" >> $GITHUB_OUTPUT
+          echo "🏷️  Имя скилла: $SKILL_NAME"
+
+      - name: Build .skill
+        run: |
+          python scripts/build_skill.py \
+            --repo . \
+            --output dist/${{ steps.skill.outputs.NAME }}-v${{ steps.version.outputs.VERSION }}.skill \
+            --version ${{ steps.version.outputs.VERSION }}
+
+      - name: Stable name copy for latest
+        run: cp dist/${{ steps.skill.outputs.NAME }}-v${{ steps.version.outputs.VERSION }}.skill dist/${{ steps.skill.outputs.NAME }}.skill
+
+      - name: Artifact upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.skill.outputs.NAME }}-v${{ steps.version.outputs.VERSION }}
+          path: dist/*.skill
+          retention-days: 90
+
+      - name: Check release exists
+        id: check_release
+        run: |
+          if gh release view ${{ steps.version.outputs.TAG }} &>/dev/null; then
+            echo "EXISTS=true" >> $GITHUB_OUTPUT
+            echo "ℹ️  Релиз ${{ steps.version.outputs.TAG }} уже существует - обновляю файлы"
+          else
+            echo "EXISTS=false" >> $GITHUB_OUTPUT
+            echo "🆕 Создаю новый релиз ${{ steps.version.outputs.TAG }}"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release
+        if: steps.check_release.outputs.EXISTS == 'false'
+        run: |
+          gh release create ${{ steps.version.outputs.TAG }} \
+            --title "${{ steps.skill.outputs.NAME }} v${{ steps.version.outputs.VERSION }}" \
+            --notes "Автоматическая сборка от $(date -u +'%Y-%m-%d %H:%M UTC')
+
+          **Установка:**
+          1. Скачай файл \`${{ steps.skill.outputs.NAME }}.skill\` ниже
+          2. В Claude.ai: Settings → Capabilities → Skills → Upload skill
+          3. Добавь \`raw.githubusercontent.com\` в Settings → Code execution → Additional allowed domains (если ещё не добавлен)
+
+          **Что нового:** см. [CHANGELOG.md](../../blob/main/CHANGELOG.md)
+
+          ---
+          Коммит: ${{ github.sha }}" \
+            dist/${{ steps.skill.outputs.NAME }}.skill \
+            dist/${{ steps.skill.outputs.NAME }}-v${{ steps.version.outputs.VERSION }}.skill
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update existing release files
+        if: steps.check_release.outputs.EXISTS == 'true'
+        run: |
+          gh release upload ${{ steps.version.outputs.TAG }} \
+            dist/${{ steps.skill.outputs.NAME }}.skill \
+            dist/${{ steps.skill.outputs.NAME }}-v${{ steps.version.outputs.VERSION }}.skill \
+            --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "✅ Готово"
+          echo ""
+          echo "🔗 Ссылка на релиз:"
+          echo "   https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.TAG }}"
+          echo ""
+          echo "📦 Постоянная ссылка для скачивания:"
+          echo "   https://github.com/${{ github.repository }}/releases/latest/download/${{ steps.skill.outputs.NAME }}.skill"

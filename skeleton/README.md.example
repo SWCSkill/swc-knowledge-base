@@ -1,0 +1,68 @@
+# <repo-name>
+
+Репозиторий скилла **<skill-name>** для AI-ассистента сотрудников SWC.
+
+## Хочу установить скилл
+
+Иди в [INSTALL.md](./INSTALL.md). Постоянная ссылка на актуальную версию:
+
+**https://github.com/SWCSkill/<repo-name>/releases/latest/download/<skill-name>.skill**
+
+## Что делает скилл
+
+<Опиши зону ответственности: какие задачи решает, кому помогает, что НЕ покрывает.>
+
+## Что внутри репо
+
+```
+<repo-name>/
+├── <папка-с-контентом>/         ← живой контент (статьи / ИП / FAQ / и т.п.)
+│
+├── skill-template/
+│   └── SKILL.md.template         ← шаблон с {{VERSION}} и {{BUILD_DATE}}
+├── skill-references/             ← локальные референсы скилла
+│
+├── scripts/
+│   └── build_skill.py            ← сборка .skill из шаблона + skill-references
+├── .github/workflows/
+│   └── build-skill.yml           ← автосборка релиза при push
+│
+├── VERSION                       ← текущая версия
+├── CHANGELOG.md                  ← история версий
+├── INSTALL.md                    ← инструкция установки
+└── README.md                     ← этот файл
+```
+
+## Два слоя
+
+### Слой 1. Живой контент
+
+<Опиши, что в основной папке репо: что это за единицы, как они устроены, как обновляются.>
+
+### Слой 2. Скилл
+
+Файлы скилла собираются из `skill-template/` и `skill-references/`. GitHub Action при каждом push изменений автоматически создаёт release с собранным `.skill`.
+
+## Как обновить контент
+
+Просто положи или замени файл в нужной папке через GitHub UI. Скилл подхватит изменения автоматически (без переустановки).
+
+## Как обновить поведение скилла
+
+1. Внеси правки в `skill-template/SKILL.md.template` или файлы в `skill-references/`.
+2. Подними `VERSION` (например, `1.0.0` → `1.1.0`).
+3. Допиши запись в `CHANGELOG.md`.
+4. Закоммить. Action соберёт новый release.
+5. Сотрудники переустанавливают по постоянной ссылке.
+
+## Архитектурный эталон
+
+Этот скилл следует архитектуре корпоративных скиллов SWC. Эталон - `swc-manajet-expert` (https://github.com/SWCSkill/manajet-knowledge-base).
+
+## Связанные скиллы
+
+- [swc-assistant](https://github.com/SWCSkill/swc-knowledge-base) - продукты, бренд, партнёрка SWC
+- [swc-manajet-expert](https://github.com/SWCSkill/manajet-knowledge-base) - работа в системе ManaJet
+- [swc-orgpolicies-guru](https://github.com/SWCSkill/swc-orgpolicies-guru) - орг.политика SWC
+- [manajet-api-helper](https://github.com/SWCSkill/manajet-api-helper) - API ManaJet
+- [swc-skill-toolkit](https://github.com/SWCSkill/swc-skill-toolkit) - инструментарий разработчика скиллов SWC
